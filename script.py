@@ -20,8 +20,8 @@ def obtener_comentarios(video_id):
             snippet = item["snippet"]["topLevelComment"]["snippet"]
             author = snippet["authorDisplayName"]
             text = snippet["textDisplay"]
-            likes = snippet["likeCount"]  # Número de likes
-            replies = item["snippet"]["totalReplyCount"]  # Número de respuestas
+            likes = snippet["likeCount"]
+            replies = item["snippet"]["totalReplyCount"]
             published_at = snippet["publishedAt"]
 
             comments.append([author, text, likes, replies, published_at])
