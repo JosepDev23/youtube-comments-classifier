@@ -1,3 +1,6 @@
+
+# FIRST STEP: Get data from YouTube comments (csv)
+
 from googleapiclient.discovery import build # type: ignore
 import pandas as pd # type: ignore
 
@@ -42,4 +45,34 @@ comentarios = obtener_comentarios(VIDEO_ID)
 df = pd.DataFrame(comentarios, columns=["Autor", "Comentario", "Likes", "Respuestas", "Fecha"])
 df.to_csv("comentarios_youtube.csv", index=False, encoding="utf-8")
 
-print("Comentarios guardados en 'comentarios_youtube.csv'.")
+#SECOND STEP: Preproceso de los datos
+
+import re
+import nltk
+import html
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('punkt_tab')
+
+lemmatizer = WordNetLemmatizer()
+stop_words = set(stopwords.words('english'))
+
+def preprocess_text(text):
+    text = text.lower()
+    text = html.unescape(text)  # ✅ Decodifica entidades HTML (&amp; -> &, etc.)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # ✅ Elimina URLs
+    text = re.sub(r'\n', ' ', text)  # Elimina saltos de línea
+    text = re.sub(r'[^\w\s\?\!\.\,]', '', text)  # Conserva ?, !, ., ,
+    text = re.sub(r'\s+[a-z]\s+', ' ', text)  # Elimina palabras de un carácter
+    text = re.sub(r'^b\s+', '', text)
+    text = re.sub(r'\s+', ' ', text)  # Elimina espacios extra
+    tokens = word_tokenize(text)
+    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    return ' '.join(tokens)
+
+corpus = [preprocess_text(text) for text in df["Comentario"]]
+df["Comentario"] = corpus
+df.to_csv("comentarios_youtube_preprocesado.csv", index=False, encoding="utf-8")
