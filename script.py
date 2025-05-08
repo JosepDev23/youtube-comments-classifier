@@ -89,7 +89,7 @@ import requests
 # Configuración de APIs
 # =======================
 # OpenAI (ChatGPT)
-openai_client = openai.OpenAI(api_key="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")
+openai_client = openai.OpenAI(api_key="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")
 
 # Gemini (Google)
 genai.configure(api_key="AIzaSyCBpbI1JHrgVe1ii5d_i2Jzde2fL7MqquM")
@@ -108,7 +108,7 @@ def get_chatgpt_response(text):
         response = openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
+                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo, Sugerencia o Pregunta. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
                 {"role": "user", "content": text}
             ]
         )
@@ -121,7 +121,7 @@ def get_chatgpt_response(text):
 def get_gemini_response(text):
     try:
         prompt = f"""
-            Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral.
+            Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo, Sugerencia o Pregunta.
             No des ninguna explicación, solo responde con una de esas tres palabras exactas.
 
             Comentario:
@@ -143,7 +143,7 @@ def get_deepseek_response(text):
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
+                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo, Sugerencia o Pregunta. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
                 {"role": "user", "content": text}
             ]
         }
@@ -164,12 +164,11 @@ def get_deepseek_response(text):
         return "Error"
 
 
-
-
-
 # =======================
 # Consenso ponderado
 # =======================
+
+import time
 
 def clasificacion_consenso(texto):
     votos = {"Positivo": 0, "Negativo": 0, "Neutral": 0}
