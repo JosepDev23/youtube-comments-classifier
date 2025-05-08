@@ -76,3 +76,125 @@ def preprocess_text(text):
 corpus = [preprocess_text(text) for text in df["Comentario"]]
 df["Comentario"] = corpus
 df.to_csv("comentarios_youtube_preprocesado.csv", index=False, encoding="utf-8")
+
+
+
+#THIRD STEP: Obtener clasificación de los comentarios
+
+import openai # type: ignore
+import google.generativeai as genai # type: ignore
+import requests
+
+# =======================
+# Configuración de APIs
+# =======================
+# OpenAI (ChatGPT)
+openai_client = openai.OpenAI(api_key="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")
+
+# Gemini (Google)
+genai.configure(api_key="AIzaSyCBpbI1JHrgVe1ii5d_i2Jzde2fL7MqquM")
+gemini_model = genai.GenerativeModel("models/gemini-2.0-flash")
+
+# DeepSeek (simulada como ejemplo)
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_API_KEY = "sk-97c2b9a9aeb446ffba33d91b9359cc8e"
+
+# =======================
+# Funciones de consulta
+# =======================
+
+def get_chatgpt_response(text):
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content.strip().capitalize()
+    except Exception as e:
+        print(f"[ChatGPT] Error: {e}")
+        return "Error"
+
+
+def get_gemini_response(text):
+    try:
+        prompt = f"""
+            Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral.
+            No des ninguna explicación, solo responde con una de esas tres palabras exactas.
+
+            Comentario:
+            {text}
+            """
+
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip().capitalize()
+    except Exception as e:
+        print(f"[Gemini] Error: {e}")
+        return "Error"
+
+def get_deepseek_response(text):
+    try:
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": "Clasifica el siguiente comentario de YouTube en una sola palabra: Positivo, Negativo o Neutral. No des ninguna explicación, solo responde con una de esas tres palabras exactas."},
+                {"role": "user", "content": text}
+            ]
+        }
+
+        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data)
+        result = response.json()
+
+        # Diagnóstico: mostrar respuesta si no contiene 'choices'
+        if "choices" not in result:
+            print("[DeepSeek] Respuesta inesperada:")
+            print(result)
+            return "Error"
+
+        return result["choices"][0]["message"]["content"].strip().capitalize()
+
+    except Exception as e:
+        print(f"[DeepSeek] Error: {e}")
+        return "Error"
+
+
+
+
+
+# =======================
+# Consenso ponderado
+# =======================
+
+def clasificacion_consenso(texto):
+    votos = {"Positivo": 0, "Negativo": 0, "Neutral": 0}
+
+    r1 = get_chatgpt_response(texto)
+    r2 = get_gemini_response(texto)
+    r3 = get_deepseek_response(texto)
+
+    print(f"\nComentario: {texto}")
+    print(f"ChatGPT: {r1}, Gemini: {r2}, DeepSeek: {r3}")
+
+    if r1 in votos: votos[r1] += 5
+    if r2 in votos: votos[r2] += 3
+    if r3 in votos: votos[r3] += 3
+
+    return max(votos, key=votos.get)
+
+# =======================
+# Ejemplo de uso con CSV
+# =======================
+
+
+df = pd.read_csv("comentarios_youtube_preprocesado.csv")
+
+df["Clasificación"] = df["Comentario"].apply(clasificacion_consenso)
+
+df.to_csv("comentarios_clasificados_consenso.csv", index=False, encoding="utf-8")
+print("✔ Clasificación completada y guardada en comentarios_clasificados_consenso.csv")
