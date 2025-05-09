@@ -1,13 +1,28 @@
-
-# FIRST STEP: Get data from YouTube comments (csv)
+# =======================
+# Extracción de comentarios de YouTube
+# =======================
 
 from googleapiclient.discovery import build # type: ignore
 import pandas as pd # type: ignore
+import argparse
+import os
 
-API_KEY = "AIzaSyDNiIKo2W_bvImZ2khuwEmMRt_hgXKYez0"
-VIDEO_ID = "KGhCveH03Mo"
+parser = argparse.ArgumentParser(
+    description="Extrae y clasifica los comentarios de un video de YouTube."
+)
+parser.add_argument(
+    "video_id",
+    help="ID del video de YouTube a procesar (p. ej. KGhCveH03Mo)",
+)
+args = parser.parse_args()
+VIDEO_ID = args.video_id
 
-youtube = build("youtube", "v3", developerKey=API_KEY)
+YT_API_KEY: str | None = os.getenv("YT_API_KEY")
+OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
+DEEPSEEK_API_KEY: str | None = os.getenv("DEEPSEEK_API_KEY")
+
+youtube = build("youtube", "v3", developerKey=YT_API_KEY)
 
 def obtener_comentarios(video_id):
     comments = []
@@ -45,7 +60,9 @@ comentarios = obtener_comentarios(VIDEO_ID)
 df = pd.DataFrame(comentarios, columns=["Autor", "Comentario", "Likes", "Respuestas", "Fecha"])
 df.to_csv("comentarios_youtube.csv", index=False, encoding="utf-8")
 
-#SECOND STEP: Preproceso de los datos
+# =======================
+# Preprocesamiento de texto
+# =======================
 
 import re
 import nltk
@@ -62,8 +79,8 @@ stop_words = set(stopwords.words('english'))
 
 def preprocess_text(text):
     text = text.lower()
-    text = html.unescape(text)  # ✅ Decodifica entidades HTML (&amp; -> &, etc.)
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # ✅ Elimina URLs
+    text = html.unescape(text)  # Decodifica entidades HTML (&amp; -> &, etc.)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # Elimina URLs
     text = re.sub(r'\n', ' ', text)  # Elimina saltos de línea
     text = re.sub(r'[^\w\s\?\!\.\,]', '', text)  # Conserva ?, !, ., ,
     text = re.sub(r'\s+[a-z]\s+', ' ', text)  # Elimina palabras de un carácter
@@ -73,13 +90,10 @@ def preprocess_text(text):
     tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
     return ' '.join(tokens)
 
-corpus = [preprocess_text(text) for text in df["Comentario"]]
-df["Comentario"] = corpus
+df["Comentario_Preprocesado"] = df["Comentario"].apply(preprocess_text)
+
 df.to_csv("comentarios_youtube_preprocesado.csv", index=False, encoding="utf-8")
 
-
-
-#THIRD STEP: Obtener clasificación de los comentarios
 
 import openai # type: ignore
 import google.generativeai as genai # type: ignore
@@ -88,16 +102,16 @@ import requests
 # =======================
 # Configuración de APIs
 # =======================
-# OpenAI (ChatGPT)
-openai_client = openai.OpenAI(api_key="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")
 
-# Gemini (Google)
-genai.configure(api_key="AIzaSyCBpbI1JHrgVe1ii5d_i2Jzde2fL7MqquM")
+# ChatGPT
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("models/gemini-2.0-flash")
 
-# DeepSeek (simulada como ejemplo)
+# DeepSeek
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_API_KEY = "sk-97c2b9a9aeb446ffba33d91b9359cc8e"
 
 # =======================
 # Funciones de consulta
@@ -151,7 +165,6 @@ def get_deepseek_response(text):
         response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data)
         result = response.json()
 
-        # Diagnóstico: mostrar respuesta si no contiene 'choices'
         if "choices" not in result:
             print("[DeepSeek] Respuesta inesperada:")
             print(result)
@@ -163,37 +176,32 @@ def get_deepseek_response(text):
         print(f"[DeepSeek] Error: {e}")
         return "Error"
 
-
 # =======================
-# Consenso ponderado
+# Clasificación de comentarios
 # =======================
-
-import time
 
 def clasificacion_consenso(texto):
-    votos = {"Positivo": 0, "Negativo": 0, "Neutral": 0}
+    votos = {"Positivo": 0, "Negativo": 0, "Pregunta": 0, "Sugerencia": 0}
 
     r1 = get_chatgpt_response(texto)
     r2 = get_gemini_response(texto)
     r3 = get_deepseek_response(texto)
 
-    print(f"\nComentario: {texto}")
-    print(f"ChatGPT: {r1}, Gemini: {r2}, DeepSeek: {r3}")
-
     if r1 in votos: votos[r1] += 5
     if r2 in votos: votos[r2] += 3
     if r3 in votos: votos[r3] += 3
 
-    return max(votos, key=votos.get)
+    consenso = max(votos, key=votos.get)
 
-# =======================
-# Ejemplo de uso con CSV
-# =======================
+    return consenso
 
 
 df = pd.read_csv("comentarios_youtube_preprocesado.csv")
 
-df["Clasificación"] = df["Comentario"].apply(clasificacion_consenso)
+df["Clasificación"] = df["Comentario_Preprocesado"].apply(clasificacion_consenso)
 
 df.to_csv("comentarios_clasificados_consenso.csv", index=False, encoding="utf-8")
-print("✔ Clasificación completada y guardada en comentarios_clasificados_consenso.csv")
+print("\n✔ Clasificación completada y guardada en comentarios_clasificados_consenso.csv\n")
+print("📊 Resumen de clasificaciones:")
+print(df["Clasificación"].value_counts())
+print(f"\n🧮 Total de comentarios clasificados: {len(df)}")
